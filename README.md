@@ -7,7 +7,7 @@ Reference in the main TF script as the following:
 {
   "module": {
     "networking": {
-      "source": "github.com/snatalenko/tf_networking/",
+      "source": "github.com/snatalenko/tf_networking/?ref=v0.1.1",
       "app": "${var.app}",
       "openvpn_trusted_ips": "${var.openvpn_trusted_ips}",
       "openvpn_default_password": "${var.openvpn_default_password}",

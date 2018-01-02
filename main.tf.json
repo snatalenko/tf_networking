@@ -31,6 +31,7 @@
             "description": "Default VPN administrator password (must be changed upon first login)"
         },
         "openvpn_amis": {
+            "description": "OpenVPN AMI from https://aws.amazon.com/marketplace/pp/B00MI40CAE/ref=mkt_wir_openvpn_byol",
             "default": {
                 "us-east-1": "ami-38a3292f",
                 "us-west-1": "ami-87d091e7",
@@ -38,6 +39,8 @@
             }
         },
         "openvpn_instance_key_name": {
+            "description": "aws_key_pair key name to use for the OpenVPN instance",
+            "default": ""
         }
     },
     "resource": {
@@ -74,15 +77,15 @@
                 "cidr_block": "${var.vpc_cidr_prefix}.16.0/20",
                 "availability_zone": "${var.zone_2}"
             },
-            "protected": {
+            "public_3": {
                 "tags": {
-                    "Name": "${var.app}-protected",
+                    "Name": "${var.app}-public-3",
                     "Application": "${var.app}",
                     "Environment": "${var.env}"
                 },
                 "vpc_id": "${aws_vpc.main.id}",
                 "cidr_block": "${var.vpc_cidr_prefix}.32.0/20",
-                "availability_zone": "${var.zone_1}"
+                "availability_zone": "${var.zone_3}"
             },
             "private_1": {
                 "tags": {
@@ -195,9 +198,9 @@
                 "route_table_id": "${aws_route_table.internet.id}",
                 "subnet_id": "${aws_subnet.public_2.id}"
             },
-            "protected": {
-                "route_table_id": "${aws_route_table.nat.id}",
-                "subnet_id": "${aws_subnet.protected.id}"
+            "public_3": {
+                "route_table_id": "${aws_route_table.internet.id}",
+                "subnet_id": "${aws_subnet.public_3.id}"
             },
             "private_1": {
                 "route_table_id": "${aws_route_table.nat.id}",
@@ -222,11 +225,11 @@
                 "vpc_id": "${aws_vpc.main.id}",
                 "subnet_ids": [
                     "${aws_subnet.public_1.id}",
-                    "${aws_subnet.public_2.id}"
+                    "${aws_subnet.public_2.id}",
+                    "${aws_subnet.public_3.id}"
                 ],
                 "ingress": [
                     { "rule_no": 100, "action": "allow", "cidr_block": "0.0.0.0/0", "from_port": 80, "to_port": 80, "protocol": "tcp" },
-                    { "rule_no": 101, "action": "allow", "cidr_block": "0.0.0.0/0", "from_port": 81, "to_port": 81, "protocol": "tcp" },
                     { "rule_no": 110, "action": "allow", "cidr_block": "0.0.0.0/0", "from_port": 443, "to_port": 443, "protocol": "tcp" },
                     { "rule_no": 140, "action": "allow", "cidr_block": "0.0.0.0/0", "from_port": 943, "to_port": 943, "protocol": "tcp" },
                     { "rule_no": 150, "action": "allow", "cidr_block": "0.0.0.0/0", "from_port": 1194, "to_port": 1194, "protocol": "udp" },
@@ -242,30 +245,6 @@
                     { "rule_no": 150, "action": "allow", "cidr_block": "0.0.0.0/0", "from_port": 22, "to_port": 22, "protocol": "tcp" },
                     { "rule_no": 300, "action": "allow", "cidr_block": "${aws_vpc.main.cidr_block}", "from_port": 0, "to_port": 0, "protocol": "all" },
                     { "rule_no": 400, "action": "allow", "cidr_block": "0.0.0.0/0", "from_port": 1024, "to_port": 65535, "protocol": "tcp" }
-                ]
-            },
-            "protected": {
-                "tags": {
-                    "Name": "${var.app}-protected",
-                    "Application": "${var.app}",
-                    "Environment": "${var.env}"
-                },
-                "vpc_id": "${aws_vpc.main.id}",
-                "subnet_ids": [
-                    "${aws_subnet.protected.id}"
-                ],
-                "ingress": [
-                    { "rule_no": 100, "action": "allow", "cidr_block": "${aws_subnet.public_1.cidr_block}", "from_port": 22, "to_port": 22, "protocol": "tcp" },
-                    { "rule_no": 110, "action": "allow", "cidr_block": "${aws_subnet.public_2.cidr_block}", "from_port": 22, "to_port": 22, "protocol": "tcp" },
-                    { "rule_no": 120, "action": "allow", "cidr_block": "${aws_subnet.public_1.cidr_block}", "from_port": 80, "to_port": 80, "protocol": "tcp" },
-                    { "rule_no": 130, "action": "allow", "cidr_block": "${aws_subnet.public_2.cidr_block}", "from_port": 80, "to_port": 80, "protocol": "tcp" },
-                    { "rule_no": 400, "action": "allow", "cidr_block": "0.0.0.0/0", "from_port": 1024, "to_port": 65535, "protocol": "tcp" }
-                ],
-                "egress": [
-                    { "rule_no": 100, "action": "allow", "cidr_block": "${aws_subnet.public_1.cidr_block}", "from_port": 1024, "to_port": 65535, "protocol": "tcp" },
-                    { "rule_no": 110, "action": "allow", "cidr_block": "${aws_subnet.public_2.cidr_block}", "from_port": 1024, "to_port": 65535, "protocol": "tcp" },
-                    { "rule_no": 120, "action": "deny", "cidr_block": "${aws_vpc.main.cidr_block}", "from_port": 0, "to_port": 0, "protocol": "all" },
-                    { "rule_no": 500, "action": "allow", "cidr_block": "0.0.0.0/0", "from_port": 0, "to_port": 0, "protocol": "all" }
                 ]
             },
             "private": {
@@ -362,10 +341,11 @@
             "value": "${aws_vpc.main.id}"
         },
         "public_subnets": {
-            "value": ["${aws_subnet.public_1.id}", "${aws_subnet.public_2.id}"]
-        },
-        "protected_subnets": {
-            "value": ["${aws_subnet.protected.id}"]
+            "value": [
+                "${aws_subnet.public_1.id}",
+                "${aws_subnet.public_2.id}",
+                "${aws_subnet.public_3.id}"
+            ]
         },
         "private_subnets": {
             "value": [
