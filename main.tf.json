@@ -1,0 +1,407 @@
+{
+    "variable": {
+        "app": {
+            "description": "Short application name to use as component names prefix (e.g. myapp)"
+        },
+        "env": {
+            "description": "Environment name (e.g. staging or production)",
+            "default": "production"
+        },
+        "region": {
+            "default": "us-east-1"
+        },
+        "zone_1": {
+            "default": "us-east-1b"
+        },
+        "zone_2": {
+            "default": "us-east-1c"
+        },
+        "zone_3": {
+            "default": "us-east-1d"
+        },
+        "vpc_cidr_prefix": {
+            "description": "IP address prefix to use in VPC and subnet configuration (e.g. 10.0, 192.168, etc.)",
+            "default": "10.0"
+        },
+        "openvpn_trusted_ips": {
+            "description": "Coma-separated list of trusted network CIDR blocks",
+            "default": "0.0.0.0/0"
+        },
+        "openvpn_default_password": {
+            "description": "Default VPN administrator password (must be changed upon first login)"
+        },
+        "openvpn_amis": {
+            "default": {
+                "us-east-1": "ami-38a3292f",
+                "us-west-1": "ami-87d091e7",
+                "us-west-2": "ami-47965927"
+            }
+        },
+        "openvpn_instance_key_name": {
+        }
+    },
+    "resource": {
+        "aws_vpc": {
+            "main": {
+                "tags": {
+                    "Name": "${var.app}-vpc",
+                    "Application": "${var.app}",
+                    "Environment": "${var.env}"
+                },
+                "cidr_block": "${var.vpc_cidr_prefix}.0.0/16",
+                "enable_dns_support": true,
+                "enable_dns_hostnames": true
+            }
+        },
+        "aws_subnet": {
+            "public_1": {
+                "tags": {
+                    "Name": "${var.app}-public-1",
+                    "Application": "${var.app}",
+                    "Environment": "${var.env}"
+                },
+                "vpc_id": "${aws_vpc.main.id}",
+                "cidr_block": "${var.vpc_cidr_prefix}.0.0/20",
+                "availability_zone": "${var.zone_1}"
+            },
+            "public_2": {
+                "tags": {
+                    "Name": "${var.app}-public-2",
+                    "Application": "${var.app}",
+                    "Environment": "${var.env}"
+                },
+                "vpc_id": "${aws_vpc.main.id}",
+                "cidr_block": "${var.vpc_cidr_prefix}.16.0/20",
+                "availability_zone": "${var.zone_2}"
+            },
+            "protected": {
+                "tags": {
+                    "Name": "${var.app}-protected",
+                    "Application": "${var.app}",
+                    "Environment": "${var.env}"
+                },
+                "vpc_id": "${aws_vpc.main.id}",
+                "cidr_block": "${var.vpc_cidr_prefix}.32.0/20",
+                "availability_zone": "${var.zone_1}"
+            },
+            "private_1": {
+                "tags": {
+                    "Name": "${var.app}-private-1",
+                    "Application": "${var.app}",
+                    "Environment": "${var.env}"
+                },
+                "vpc_id": "${aws_vpc.main.id}",
+                "cidr_block": "${var.vpc_cidr_prefix}.128.0/20",
+                "availability_zone": "${var.zone_1}"
+            },
+            "private_2": {
+                "tags": {
+                    "Name": "${var.app}-private-2",
+                    "Application": "${var.app}",
+                    "Environment": "${var.env}"
+                },
+                "vpc_id": "${aws_vpc.main.id}",
+                "cidr_block": "${var.vpc_cidr_prefix}.144.0/20",
+                "availability_zone": "${var.zone_2}"
+            },
+            "private_3": {
+                "tags": {
+                    "Name": "${var.app}-private-3",
+                    "Application": "${var.app}",
+                    "Environment": "${var.env}"
+                },
+                "vpc_id": "${aws_vpc.main.id}",
+                "cidr_block": "${var.vpc_cidr_prefix}.160.0/20",
+                "availability_zone": "${var.zone_3}"
+            }
+        },
+        "aws_internet_gateway": {
+            "main": {
+                "tags": {
+                    "Name": "${var.app}-internet-gateway",
+                    "Application": "${var.app}",
+                    "Environment": "${var.env}"
+                },
+                "vpc_id": "${aws_vpc.main.id}"
+            }
+        },
+        "aws_eip": {
+            "nat": {
+                "vpc": true
+            },
+            "vpn": {
+                "vpc": true
+            }
+        },
+        "aws_eip_association": {
+            "vpn": {
+                "instance_id": "${aws_instance.vpn.id}",
+                "allocation_id": "${aws_eip.vpn.id}"
+            }
+        },
+        "aws_nat_gateway": {
+            "nat": {
+                "allocation_id": "${aws_eip.nat.id}",
+                "subnet_id": "${aws_subnet.public_1.id}",
+                "depends_on": [
+                    "aws_internet_gateway.main"
+                ]
+            }
+        },
+        "aws_route_table": {
+            "internet": {
+                "tags": {
+                    "Name": "${var.app}-internet",
+                    "Application": "${var.app}",
+                    "Environment": "${var.env}"
+                },
+                "vpc_id": "${aws_vpc.main.id}"
+            },
+            "nat": {
+                "tags": {
+                    "Name": "${var.app}-nat-1",
+                    "Application": "${var.app}",
+                    "Environment": "${var.env}"
+                },
+                "vpc_id": "${aws_vpc.main.id}"
+            }
+        },
+        "aws_route": {
+            "default": {
+                "route_table_id": "${aws_vpc.main.main_route_table_id}",
+                "destination_cidr_block": "0.0.0.0/0",
+                "gateway_id": "${aws_internet_gateway.main.id}",
+                "depends_on": [
+                    "aws_vpc.main"
+                ]
+            },
+            "internet": {
+                "route_table_id": "${aws_route_table.internet.id}",
+                "destination_cidr_block": "0.0.0.0/0",
+                "gateway_id": "${aws_internet_gateway.main.id}"
+            },
+            "nat": {
+                "route_table_id": "${aws_route_table.nat.id}",
+                "destination_cidr_block": "0.0.0.0/0",
+                "nat_gateway_id": "${aws_nat_gateway.nat.id}"
+            }
+        },
+        "aws_route_table_association": {
+            "public_1": {
+                "route_table_id": "${aws_route_table.internet.id}",
+                "subnet_id": "${aws_subnet.public_1.id}"
+            },
+            "public_2": {
+                "route_table_id": "${aws_route_table.internet.id}",
+                "subnet_id": "${aws_subnet.public_2.id}"
+            },
+            "protected": {
+                "route_table_id": "${aws_route_table.nat.id}",
+                "subnet_id": "${aws_subnet.protected.id}"
+            },
+            "private_1": {
+                "route_table_id": "${aws_route_table.nat.id}",
+                "subnet_id": "${aws_subnet.private_1.id}"
+            },
+            "private_2": {
+                "route_table_id": "${aws_route_table.nat.id}",
+                "subnet_id": "${aws_subnet.private_2.id}"
+            },
+            "private_3": {
+                "route_table_id": "${aws_route_table.nat.id}",
+                "subnet_id": "${aws_subnet.private_3.id}"
+            }
+        },
+        "aws_network_acl": {
+            "public": {
+                "tags": {
+                    "Name": "${var.app}-public",
+                    "Application": "${var.app}",
+                    "Environment": "${var.env}"
+                },
+                "vpc_id": "${aws_vpc.main.id}",
+                "subnet_ids": [
+                    "${aws_subnet.public_1.id}",
+                    "${aws_subnet.public_2.id}"
+                ],
+                "ingress": [
+                    { "rule_no": 100, "action": "allow", "cidr_block": "0.0.0.0/0", "from_port": 80, "to_port": 80, "protocol": "tcp" },
+                    { "rule_no": 101, "action": "allow", "cidr_block": "0.0.0.0/0", "from_port": 81, "to_port": 81, "protocol": "tcp" },
+                    { "rule_no": 110, "action": "allow", "cidr_block": "0.0.0.0/0", "from_port": 443, "to_port": 443, "protocol": "tcp" },
+                    { "rule_no": 140, "action": "allow", "cidr_block": "0.0.0.0/0", "from_port": 943, "to_port": 943, "protocol": "tcp" },
+                    { "rule_no": 150, "action": "allow", "cidr_block": "0.0.0.0/0", "from_port": 1194, "to_port": 1194, "protocol": "udp" },
+                    { "rule_no": 300, "action": "allow", "cidr_block": "${aws_vpc.main.cidr_block}", "from_port": 0, "to_port": 0, "protocol": "all" },
+                    { "rule_no": 400, "action": "allow", "cidr_block": "0.0.0.0/0", "from_port": 1024, "to_port": 65535, "protocol": "tcp" }
+                ],
+                "egress": [
+                    { "rule_no": 100, "action": "allow", "cidr_block": "0.0.0.0/0", "from_port": 80, "to_port": 80, "protocol": "tcp" },
+                    { "rule_no": 110, "action": "allow", "cidr_block": "0.0.0.0/0", "from_port": 443, "to_port": 443, "protocol": "tcp" },
+                    { "rule_no": 120, "action": "allow", "cidr_block": "0.0.0.0/0", "from_port": 25, "to_port": 25, "protocol": "tcp" },
+                    { "rule_no": 130, "action": "allow", "cidr_block": "0.0.0.0/0", "from_port": 465, "to_port": 465, "protocol": "tcp" },
+                    { "rule_no": 140, "action": "allow", "cidr_block": "0.0.0.0/0", "from_port": 587, "to_port": 587, "protocol": "tcp" },
+                    { "rule_no": 150, "action": "allow", "cidr_block": "0.0.0.0/0", "from_port": 22, "to_port": 22, "protocol": "tcp" },
+                    { "rule_no": 300, "action": "allow", "cidr_block": "${aws_vpc.main.cidr_block}", "from_port": 0, "to_port": 0, "protocol": "all" },
+                    { "rule_no": 400, "action": "allow", "cidr_block": "0.0.0.0/0", "from_port": 1024, "to_port": 65535, "protocol": "tcp" }
+                ]
+            },
+            "protected": {
+                "tags": {
+                    "Name": "${var.app}-protected",
+                    "Application": "${var.app}",
+                    "Environment": "${var.env}"
+                },
+                "vpc_id": "${aws_vpc.main.id}",
+                "subnet_ids": [
+                    "${aws_subnet.protected.id}"
+                ],
+                "ingress": [
+                    { "rule_no": 100, "action": "allow", "cidr_block": "${aws_subnet.public_1.cidr_block}", "from_port": 22, "to_port": 22, "protocol": "tcp" },
+                    { "rule_no": 110, "action": "allow", "cidr_block": "${aws_subnet.public_2.cidr_block}", "from_port": 22, "to_port": 22, "protocol": "tcp" },
+                    { "rule_no": 120, "action": "allow", "cidr_block": "${aws_subnet.public_1.cidr_block}", "from_port": 80, "to_port": 80, "protocol": "tcp" },
+                    { "rule_no": 130, "action": "allow", "cidr_block": "${aws_subnet.public_2.cidr_block}", "from_port": 80, "to_port": 80, "protocol": "tcp" },
+                    { "rule_no": 400, "action": "allow", "cidr_block": "0.0.0.0/0", "from_port": 1024, "to_port": 65535, "protocol": "tcp" }
+                ],
+                "egress": [
+                    { "rule_no": 100, "action": "allow", "cidr_block": "${aws_subnet.public_1.cidr_block}", "from_port": 1024, "to_port": 65535, "protocol": "tcp" },
+                    { "rule_no": 110, "action": "allow", "cidr_block": "${aws_subnet.public_2.cidr_block}", "from_port": 1024, "to_port": 65535, "protocol": "tcp" },
+                    { "rule_no": 120, "action": "deny", "cidr_block": "${aws_vpc.main.cidr_block}", "from_port": 0, "to_port": 0, "protocol": "all" },
+                    { "rule_no": 500, "action": "allow", "cidr_block": "0.0.0.0/0", "from_port": 0, "to_port": 0, "protocol": "all" }
+                ]
+            },
+            "private": {
+                "tags": {
+                    "Name": "${var.app}-private",
+                    "Application": "${var.app}",
+                    "Environment": "${var.env}"
+                },
+                "vpc_id": "${aws_vpc.main.id}",
+                "subnet_ids": [
+                    "${aws_subnet.private_1.id}",
+                    "${aws_subnet.private_2.id}",
+                    "${aws_subnet.private_3.id}"
+                ],
+                "ingress": [
+                    { "rule_no": 100, "action": "allow", "cidr_block": "${aws_vpc.main.cidr_block}", "from_port": 0, "to_port": 0, "protocol": "all" },
+                    { "rule_no": 400, "action": "allow", "cidr_block": "0.0.0.0/0", "from_port": 32768, "to_port": 65535, "protocol": "tcp" }
+                ],
+                "egress": [
+                    { "rule_no": 100, "action": "allow", "cidr_block": "${aws_vpc.main.cidr_block}", "from_port": 0, "to_port": 0, "protocol": "all" },
+                    { "rule_no": 120, "action": "allow", "cidr_block": "0.0.0.0/0", "from_port": 443, "to_port": 443, "protocol": "tcp" }
+                ]
+            }
+        },
+        "aws_security_group": {
+            "updates": {
+                "name": "updates",
+                "vpc_id": "${aws_vpc.main.id}",
+                "egress": [
+                    { "from_port": 443, "to_port": 443, "protocol": "tcp", "cidr_blocks": [ "0.0.0.0/0" ] }
+                ],
+                "tags": {
+                    "Name": "${var.app}-updates",
+                    "Application": "${var.app}",
+                    "Environment": "${var.env}"
+                }
+            },
+            "vpn": {
+                "tags": {
+                    "Name": "${var.app}-vpn",
+                    "Application": "${var.app}",
+                    "Environment": "${var.env}"
+                },
+                "name": "vpn",
+                "vpc_id": "${aws_vpc.main.id}",
+                "ingress": [
+                    { "from_port": 443, "to_port": 443, "protocol": "tcp", "cidr_blocks": [ "${split(\",\", var.openvpn_trusted_ips)}" ] },
+                    { "from_port": 943, "to_port": 943, "protocol": "tcp", "cidr_blocks": [ "${split(\",\", var.openvpn_trusted_ips)}" ] },
+                    { "from_port": 1194, "to_port": 1194, "protocol": "udp", "cidr_blocks": [ "${split(\",\", var.openvpn_trusted_ips)}" ] }
+                ],
+                "egress": [
+                    { "from_port": 0, "to_port": 0, "protocol": "-1", "cidr_blocks": [ "${aws_vpc.main.cidr_block}" ] }
+                ]
+            },
+            "admin": {
+                "name": "admin",
+                "vpc_id": "${aws_vpc.main.id}",
+                "ingress": [
+                    { "from_port": 22, "to_port": 22, "protocol": "tcp", "security_groups": [ "${aws_security_group.vpn.id}" ] },
+                    { "from_port": 27017, "to_port": 27017, "protocol": "tcp", "security_groups": [ "${aws_security_group.vpn.id}" ] }
+                ],
+                "tags": {
+                    "Name": "${var.app}-admin",
+                    "Application": "${var.app}",
+                    "Environment": "${var.env}"
+                }
+            }
+        },
+        "aws_instance": {
+            "vpn": {
+                "tags": {
+                    "Name": "${var.app}-vpn",
+                    "Application": "${var.app}",
+                    "Environment": "${var.env}"
+                },
+                "subnet_id": "${aws_subnet.public_1.id}",
+                "key_name": "${var.openvpn_instance_key_name}",
+                "instance_type": "t2.micro",
+                "ami": "${lookup(var.openvpn_amis, var.region)}",
+                "associate_public_ip_address": true,
+                "disable_api_termination": false,
+                "source_dest_check": false,
+                "vpc_security_group_ids": [
+                    "${aws_security_group.vpn.id}",
+                    "${aws_security_group.updates.id}",
+                    "${aws_security_group.admin.id}"
+                ],
+                "user_data": "admin_pw=${var.openvpn_default_password}\nreroute_dns=1"
+            }
+        }
+    },
+    "output": {
+        "vpc_id": {
+            "value": "${aws_vpc.main.id}"
+        },
+        "public_subnets": {
+            "value": ["${aws_subnet.public_1.id}", "${aws_subnet.public_2.id}"]
+        },
+        "protected_subnets": {
+            "value": ["${aws_subnet.protected.id}"]
+        },
+        "private_subnets": {
+            "value": [
+                "${aws_subnet.private_1.id}",
+                "${aws_subnet.private_2.id}",
+                "${aws_subnet.private_3.id}"
+            ]
+        },
+        "private_subnet_cidr": {
+            "value": [
+                "${aws_subnet.private_1.cidr_block}",
+                "${aws_subnet.private_2.cidr_block}",
+                "${aws_subnet.private_3.cidr_block}"
+            ]
+        },
+        "availability_zones": {
+            "value": [
+                "${var.zone_1}",
+                "${var.zone_2}",
+                "${var.zone_3}"
+            ]
+        },
+        "nat_public_ip": {
+            "value": "${aws_eip.nat.public_ip}"
+        },
+        "vpn_public_ip": {
+            "value": "${aws_eip.vpn.public_ip}"
+        },
+        "vpn_security_group_id": {
+            "value": "${aws_security_group.vpn.id}"
+        },
+        "updates_security_group_id": {
+            "value": "${aws_security_group.updates.id}"
+        },
+        "admin_security_group_id": {
+            "value": "${aws_security_group.admin.id}"
+        }
+    }
+}
